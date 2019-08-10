@@ -12,108 +12,109 @@ var connection = mysql.createConnection({
   database: "bamazon_db"
 });
 
-// Creates server connection and loads product data 
+// Creates server connection and loads product data
 connection.connect(function(err) {
   if (err) {
-    console.error("error connecting: " + err.stack);
+    return console.error("error connecting: " + err.stack);
   }
   loadProducts();
 });
 
-
 function loadProducts() {
   // Selects all of the data from the MySQL products table
   connection.query("SELECT * FROM products", function(err, res) {
-    if (err) throw err;
+    if (err) {
+      throw err;
+    }
 
     // Draw the table in the terminal using the response
     console.table(res);
 
     // Then prompt the customer for their choice of product, pass all the products to whichItem
-    whichItem(res);
+    whichItem();
+    // Console.log("Welcome to Bamazon!") Didn't trigger for me
   });
 }
 
 // Prompt the customer for a product ID
-function whichItem(inventory) {
+function whichItem() {
   // Ask customer which item they'd like to buy
   inquirer
     .prompt([
       {
         type: "input",
         name: "choice",
-        message: "What is the ID of the item you would you like to purchase",
+        message: "What is the ID of the item you'd like to purchase",
         validate: function(val) {
           return !isNaN(val) || val.toLowerCase() === "q";
         }
       }
     ])
-    .then(function(response){
-        console.log(response);
-        //   Ask the user how many of the item they would like to buy
-      if (response.choice) {
-        howMany(response);
+    .then(function(response) {
+      console.log(response);
+      //   Ask the user how many of the item they would like to buy
+      // var product = checkInventory(choiceId, inventory); throws an error
+      if (response.choice.toLowerCase() === "q") {
+        console.log("goodbye!");
+        connection.end();
+      } else {
+        howMany(response.choice); // {choice: 1}
       }
-      else {
-        // If not in the inventory, re-run loadProducts
-        console.log("\nsold out!");
-        loadProducts();
-      }
-    })
-    
+    });
 }
 
 // Prompt the customer for a product quantity
-function howMany(product) {
+function howMany(productId) {
   inquirer
     .prompt([
       {
         type: "input",
         name: "quantity",
-        message: "Quantity?",
+        message: "And how many would you like?",
         validate: function(val) {
           return val > 0 || val.toLowerCase() === "q";
         }
       }
     ])
-    .then(function(response){
-        console.log(response);
-        if (response.quantity > product.choice) {
-            loadProducts();
+    .then(function(response) {
+      console.log(response);
+      if (response.quantity.toLowerCase() === "q") {
+        console.log("goodbye!");
+        connection.end();
+      } else {
+        // make a MySQL query getting the quantity of the product by ID
+        connection.query(
+          "SELECT quantity FROM products WHERE id = ?",
+          productId,
+          function(err, res) {
+            if (err) {
+              throw err;
+            }
+            console.log(res);
+            if (response.quantity > res[0].quantity) {
+              console.log("Insufficient quantity!");
+            } else {
+              purchase(productId, response.quantity);
+            }
           }
-          else {
-            // Let the user know we're sold out
-            // Otherwise run makePurchase, give it the product information and desired quantity to purchase
-            purchase(product.choice, response.quantity);
-          }
-    })
-
-     
-      
+        );
+      }
+    });
 }
 
 // Purchase items
-function purchase(product, quantity) {
+function purchase(productId, quantity) {
   connection.query(
-    "UPDATE products SET quantity = quantity - ? WHERE item_id = ?",
-    [quantity, product.item_id],
+    "UPDATE products SET quantity = quantity - ? WHERE id = ?",
+    [quantity, productId],
     function(err, res) {
-    
-      console.log("\nThank you!");
+      if (err) {
+        throw err;
+      }
+      console.log("\nThank you! Please come again");
       loadProducts();
     }
   );
 }
 
-
-function checkInventory(choiceId, inventory) {
-    // Check for availability
-  for (var i = 0; i < inventory.length; i++) {
-    if (inventory[i].item_id === choiceId) {
-      return inventory[i];
-    }
-  }
-  return null;
-}
-
-
+// add quit feature
